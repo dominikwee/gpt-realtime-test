@@ -109,20 +109,30 @@ function disconnect() {
 
 // Session Initialization
 function initializeSession() {
+    console.log('🔧 Initializing session configuration...');
+    
     const sessionConfig = {
         type: 'session.update',
         session: {
             modalities: ['text', 'audio'],
-            instructions: 'You are a helpful assistant.',
+            instructions: 'You are a helpful AI assistant. Please speak clearly and naturally.',
             voice: 'alloy',
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
+            input_audio_transcription: {
+                model: 'whisper-1'
+            },
             turn_detection: {
-                type: 'server_vad'
-            }
+                type: 'server_vad',
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 500
+            },
+            temperature: 0.8
         }
     };
 
+    console.log('📤 Sending session config:', JSON.stringify(sessionConfig, null, 2));
     sendMessage(sessionConfig);
 }
 
@@ -303,7 +313,7 @@ function playNextInQueue() {
 
 // Message Handling
 async function handleServerMessage(message) {
-    console.log('Received:', message.type);
+    console.log('📨 Received:', message.type, message);
 
     switch (message.type) {
         case 'connection':
@@ -316,14 +326,14 @@ async function handleServerMessage(message) {
             break;
 
         case 'session.created':
-            console.log('Session created:', message.session);
+            console.log('✅ Session created:', message.session);
             addMessage('system', 'Session created! Configuring...');
             // Initialize session configuration
             initializeSession();
             break;
 
         case 'session.updated':
-            console.log('Session updated');
+            console.log('✅ Session updated');
             addMessage('system', 'Session ready! You can now start recording.');
             break;
 

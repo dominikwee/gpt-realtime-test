@@ -44,10 +44,14 @@ wss.on('connection', (clientWs) => {
   let isAzureConnected = false;
 
   // Construct Azure OpenAI Realtime API URL
-  const azureUrl = `${AZURE_OPENAI_ENDPOINT.replace('https://', 'wss://')}/openai/realtime?api-version=2025-04-01-preview&deployment=${AZURE_OPENAI_DEPLOYMENT}`;
+  // For newer gpt-realtime models (2025-08-28), use the 2025-04-01-preview API version
+  const apiVersion = '2025-04-01-preview';
+  const azureUrl = `${AZURE_OPENAI_ENDPOINT.replace('https://', 'wss://')}/openai/realtime?api-version=${apiVersion}&deployment=${AZURE_OPENAI_DEPLOYMENT}`;
   
   console.log('🔗 Connecting to Azure OpenAI Realtime API...');
   console.log('📡 URL:', azureUrl.replace(AZURE_OPENAI_API_KEY, '***'));
+  console.log('🔧 API Version:', apiVersion);
+  console.log('📦 Deployment:', AZURE_OPENAI_DEPLOYMENT);
 
   try {
     // Create WebSocket connection to Azure OpenAI
@@ -69,6 +73,8 @@ wss.on('connection', (clientWs) => {
         status: 'connected',
         message: 'Connected to Azure OpenAI Realtime API'
       }));
+      
+      console.log('⏳ Waiting for session.created event from Azure...');
     });
 
     // Forward messages from Azure to client
@@ -79,12 +85,22 @@ wss.on('connection', (clientWs) => {
           
           // Log important events (optional, for debugging)
           const message = JSON.parse(data.toString());
+          console.log(`📨 Azure -> Client: ${message.type}`);
+          
           if (message.type === 'error') {
-            console.error('❌ Azure error:', message.error);
+            console.error('❌ Azure error:', message.error || message);
           } else if (message.type === 'session.created') {
-            console.log('📝 Session created:', message.session.id);
+            console.log('📝 Session created:', message.session?.id);
+            console.log('🎤 Voice:', message.session?.voice);
+            console.log('🔧 Modalities:', message.session?.modalities);
+          } else if (message.type === 'session.updated') {
+            console.log('⚙️  Session updated successfully');
           } else if (message.type === 'response.done') {
             console.log('✅ Response completed');
+          } else if (message.type === 'input_audio_buffer.speech_started') {
+            console.log('🎤 Speech detected');
+          } else if (message.type === 'input_audio_buffer.speech_stopped') {
+            console.log('🛑 Speech stopped');
           }
         }
       } catch (error) {
