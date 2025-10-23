@@ -47,7 +47,7 @@ async function connect() {
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            console.log('WebSocket connected');
+            console.log('Client: WebSocket connected');
             updateStatus('connected', 'Connected');
             isConnected = true;
             connectBtn.innerHTML = '<span class="btn-icon">🔌</span><span>Disconnect</span>';
@@ -55,7 +55,7 @@ async function connect() {
             micBtn.disabled = false;
             
             // Don't initialize session immediately - wait for session.created event
-            addMessage('system', 'Connected to Azure OpenAI. Waiting for session...');
+            addMessage('system', 'Client: Connected to Azure OpenAI. Waiting for session...');
         };
 
         ws.onmessage = async (event) => {
@@ -73,7 +73,7 @@ async function connect() {
         };
 
         ws.onclose = () => {
-            console.log('WebSocket closed');
+            console.log('Client: WebSocket closed');
             disconnect();
         };
 
@@ -109,7 +109,7 @@ function disconnect() {
 
 // Session Initialization
 function initializeSession() {
-    console.log('🔧 Initializing session configuration...');
+    console.log('Client: Initializing session configuration...');
     
     const sessionConfig = {
         type: 'session.update',
@@ -132,7 +132,7 @@ function initializeSession() {
         }
     };
 
-    console.log('📤 Sending session config:', JSON.stringify(sessionConfig, null, 2));
+    console.log('Client: Sending session config:', JSON.stringify(sessionConfig, null, 2));
     sendMessage(sessionConfig);
 }
 
@@ -313,7 +313,7 @@ function playNextInQueue() {
 
 // Message Handling
 async function handleServerMessage(message) {
-    console.log('📨 Received:', message.type, message);
+    console.log('Client: Received:', message.type, message);
 
     switch (message.type) {
         case 'connection':
@@ -326,31 +326,31 @@ async function handleServerMessage(message) {
             break;
 
         case 'session.created':
-            console.log('✅ Session created:', message.session);
+            console.log('Client: Session created:', message.session);
             addMessage('system', 'Session created! Configuring...');
             // Initialize session configuration
             initializeSession();
             break;
 
         case 'session.updated':
-            console.log('✅ Session updated');
+            console.log('Client: Session updated');
             addMessage('system', 'Session ready! You can now start recording.');
             break;
 
         case 'conversation.item.created':
-            console.log('Conversation item created');
+            console.log('Client: Conversation item created');
             break;
 
         case 'input_audio_buffer.speech_started':
-            addMessage('system', '🎤 Speech detected...');
+            addMessage('system', 'Speech detected...');
             break;
 
         case 'input_audio_buffer.speech_stopped':
-            console.log('Speech stopped');
+            console.log('Client: Speech stopped');
             break;
 
         case 'input_audio_buffer.committed':
-            console.log('Audio buffer committed');
+            console.log('Client: Audio buffer committed');
             break;
 
         case 'conversation.item.input_audio_transcription.completed':
@@ -360,15 +360,15 @@ async function handleServerMessage(message) {
             break;
 
         case 'response.created':
-            console.log('Response created');
+            console.log('Client: Response created');
             break;
 
         case 'response.output_item.added':
-            console.log('Output item added');
+            console.log('Client: Output item added');
             break;
 
         case 'response.content_part.added':
-            console.log('Content part added');
+            console.log('Client: Content part added');
             break;
 
         case 'response.audio_transcript.delta':
@@ -388,16 +388,16 @@ async function handleServerMessage(message) {
             break;
 
         case 'response.done':
-            console.log('Response completed');
+            console.log('Client: Response completed');
             break;
 
         case 'error':
-            console.error('Error from server:', message);
+            console.error('Client: Error from server:', message);
             addMessage('error', message.message || 'An error occurred');
             break;
 
         default:
-            console.log('Unhandled message type:', message.type);
+            console.log('Client: Unhandled message type:', message.type);
     }
 }
 
