@@ -47,7 +47,7 @@ async function connect() {
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            console.log('Client: WebSocket connected');
+            console.log('WebSocket connected');
             updateStatus('connected', 'Connected');
             isConnected = true;
             connectBtn.innerHTML = '<span class="btn-icon">🔌</span><span>Disconnect</span>';
@@ -73,7 +73,7 @@ async function connect() {
         };
 
         ws.onclose = () => {
-            console.log('Client: WebSocket closed');
+            console.log('WebSocket closed');
             disconnect();
         };
 
@@ -109,7 +109,7 @@ function disconnect() {
 
 // Session Initialization
 function initializeSession() {
-    console.log('Client: Initializing session configuration...');
+    console.log('Initializing session configuration...');
     
     const sessionConfig = {
         type: 'session.update',
@@ -132,7 +132,7 @@ function initializeSession() {
         }
     };
 
-    console.log('Client: Sending session config:', JSON.stringify(sessionConfig, null, 2));
+    console.log('Sending session config:', JSON.stringify(sessionConfig, null, 2));
     sendMessage(sessionConfig);
 }
 
@@ -313,7 +313,7 @@ function playNextInQueue() {
 
 // Message Handling
 async function handleServerMessage(message) {
-    console.log('Client: Received:', message.type, message);
+    console.log('Received:', message.type, message);
 
     switch (message.type) {
         case 'connection':
@@ -326,19 +326,19 @@ async function handleServerMessage(message) {
             break;
 
         case 'session.created':
-            console.log('Client: Session created:', message.session);
+            console.log('Session created:', message.session);
             addMessage('system', 'Session created! Configuring...');
             // Initialize session configuration
             initializeSession();
             break;
 
         case 'session.updated':
-            console.log('Client: Session updated');
+            console.log('Session updated');
             addMessage('system', 'Session ready! You can now start recording.');
             break;
 
         case 'conversation.item.created':
-            console.log('Client: Conversation item created');
+            console.log('Conversation item created');
             break;
 
         case 'input_audio_buffer.speech_started':
@@ -346,11 +346,11 @@ async function handleServerMessage(message) {
             break;
 
         case 'input_audio_buffer.speech_stopped':
-            console.log('Client: Speech stopped');
+            console.log('Speech stopped');
             break;
 
         case 'input_audio_buffer.committed':
-            console.log('Client: Audio buffer committed');
+            console.log('Audio buffer committed');
             break;
 
         case 'conversation.item.input_audio_transcription.completed':
@@ -360,15 +360,15 @@ async function handleServerMessage(message) {
             break;
 
         case 'response.created':
-            console.log('Client: Response created');
+            console.log('Response created');
             break;
 
         case 'response.output_item.added':
-            console.log('Client: Output item added');
+            console.log('Output item added');
             break;
 
         case 'response.content_part.added':
-            console.log('Client: Content part added');
+            console.log('Content part added');
             break;
 
         case 'response.audio_transcript.delta':
@@ -388,16 +388,16 @@ async function handleServerMessage(message) {
             break;
 
         case 'response.done':
-            console.log('Client: Response completed');
+            console.log('Response completed');
             break;
 
         case 'error':
-            console.error('Client: Error from server:', message);
+            console.error('Error from server:', message);
             addMessage('error', message.message || 'An error occurred');
             break;
 
         default:
-            console.log('Client: Unhandled message type:', message.type);
+            console.log('Unhandled message type:', message.type);
     }
 }
 

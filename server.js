@@ -32,13 +32,13 @@ app.get('/health', (req, res) => {
 // Create WebSocket server for client connections
 const wss = new WebSocket.Server({ server, path: '/realtime' });
 
-console.log('Server: Starting GPT Realtime API Server...');
-console.log(`Server: Azure Endpoint: ${AZURE_OPENAI_ENDPOINT}`);
-console.log(`Server: Deployment: ${AZURE_OPENAI_DEPLOYMENT}`);
+console.log('Starting GPT Realtime API Server...');
+console.log(`Azure Endpoint: ${AZURE_OPENAI_ENDPOINT}`);
+console.log(`Deployment: ${AZURE_OPENAI_DEPLOYMENT}`);
 
 // Handle WebSocket connections from browser clients
 wss.on('connection', (clientWs) => {
-  console.log('Server: Client connected');
+  console.log('Client connected');
   
   let azureWs = null;
   let isAzureConnected = false;
@@ -48,10 +48,10 @@ wss.on('connection', (clientWs) => {
   const apiVersion = '2025-04-01-preview';
   const azureUrl = `${AZURE_OPENAI_ENDPOINT.replace('https://', 'wss://')}/openai/realtime?api-version=${apiVersion}&deployment=${AZURE_OPENAI_DEPLOYMENT}`;
   
-  console.log('Server: Connecting to Azure OpenAI Realtime API...');
-  console.log('Server: URL:', azureUrl.replace(AZURE_OPENAI_API_KEY, '***'));
-  console.log('Server: API Version:', apiVersion);
-  console.log('Server: Deployment:', AZURE_OPENAI_DEPLOYMENT);
+  console.log('Connecting to Azure OpenAI Realtime API...');
+  console.log('URL:', azureUrl.replace(AZURE_OPENAI_API_KEY, '***'));
+  console.log('API Version:', apiVersion);
+  console.log('Deployment:', AZURE_OPENAI_DEPLOYMENT);
 
   try {
     // Create WebSocket connection to Azure OpenAI
@@ -64,17 +64,17 @@ wss.on('connection', (clientWs) => {
 
     // Azure WebSocket opened
     azureWs.on('open', () => {
-      console.log('Server: Connected to Azure OpenAI Realtime API');
+      console.log('Connected to Azure OpenAI Realtime API');
       isAzureConnected = true;
       
       // Notify client that connection is established
       clientWs.send(JSON.stringify({
         type: 'connection',
         status: 'connected',
-        message: 'Server: Connected to Azure OpenAI Realtime API'
+        message: 'Connected to Azure OpenAI Realtime API'
       }));
       
-      console.log('Server: Waiting for session.created event from Azure...');
+      console.log('Waiting for session.created event from Azure...');
     });
 
     // Forward messages from Azure to client
@@ -84,22 +84,22 @@ wss.on('connection', (clientWs) => {
         const dataString = data.toString();
         const message = JSON.parse(dataString);
         
-        console.log(`Server: Azure -> Client: ${message.type}`);
+        console.log(`Azure -> Client: ${message.type}`);
         
         if (message.type === 'error') {
-          console.error('Server: Azure error:', message.error || message);
+          console.error('Azure error:', message.error || message);
         } else if (message.type === 'session.created') {
-          console.log('Server: Session created:', message.session?.id);
-          console.log('Server: Voice:', message.session?.voice);
-          console.log('Server: Modalities:', message.session?.modalities);
+          console.log('Session created:', message.session?.id);
+          console.log('Voice:', message.session?.voice);
+          console.log('Modalities:', message.session?.modalities);
         } else if (message.type === 'session.updated') {
-          console.log('Server: Session updated successfully');
+          console.log('Session updated successfully');
         } else if (message.type === 'response.done') {
-          console.log('Server: Response completed');
+          console.log('Response completed');
         } else if (message.type === 'input_audio_buffer.speech_started') {
-          console.log('Server: Speech detected');
+          console.log('Speech detected');
         } else if (message.type === 'input_audio_buffer.speech_stopped') {
-          console.log('Server: Speech stopped');
+          console.log('Speech stopped');
         }
         
         // Forward the string data to client
@@ -107,13 +107,13 @@ wss.on('connection', (clientWs) => {
           clientWs.send(dataString);
         }
       } catch (error) {
-        console.error('Server: Error forwarding message from Azure:', error);
+        console.error('Error forwarding message from Azure:', error);
       }
     });
 
     // Handle Azure WebSocket errors
     azureWs.on('error', (error) => {
-      console.error('Server: Azure WebSocket error:', error.message);
+      console.error('Azure WebSocket error:', error.message);
       
       if (clientWs.readyState === WebSocket.OPEN) {
         clientWs.send(JSON.stringify({
@@ -125,7 +125,7 @@ wss.on('connection', (clientWs) => {
 
     // Handle Azure WebSocket closure
     azureWs.on('close', (code, reason) => {
-      console.log(`Server: Azure WebSocket closed (code: ${code})`);
+      console.log(`Azure WebSocket closed (code: ${code})`);
       isAzureConnected = false;
       
       if (clientWs.readyState === WebSocket.OPEN) {
@@ -147,25 +147,25 @@ wss.on('connection', (clientWs) => {
           // Log message types (optional, for debugging)
           const message = JSON.parse(data.toString());
           if (message.type === 'session.update') {
-            console.log('Server: Session update sent');
+            console.log('Session update sent');
           } else if (message.type === 'input_audio_buffer.append') {
             // Don't log audio chunks (too verbose)
           } else if (message.type === 'input_audio_buffer.commit') {
-            console.log('Server: Audio buffer committed');
+            console.log('Audio buffer committed');
           } else if (message.type === 'response.create') {
-            console.log('Server: Response creation requested');
+            console.log('Response creation requested');
           }
         } else {
-          console.warn('Server: Cannot send message - Azure connection not ready');
+          console.warn('Cannot send message - Azure connection not ready');
         }
       } catch (error) {
-        console.error('Server: Error forwarding message to Azure:', error);
+        console.error('Error forwarding message to Azure:', error);
       }
     });
 
     // Handle client disconnection
     clientWs.on('close', () => {
-      console.log('Server: Client disconnected');
+      console.log('Client disconnected');
       
       if (azureWs && azureWs.readyState === WebSocket.OPEN) {
         azureWs.close();
@@ -174,11 +174,11 @@ wss.on('connection', (clientWs) => {
 
     // Handle client errors
     clientWs.on('error', (error) => {
-      console.error('Server: Client WebSocket error:', error.message);
+      console.error('Client WebSocket error:', error.message);
     });
 
   } catch (error) {
-    console.error('Server: Failed to establish Azure connection:', error);
+    console.error('Failed to establish Azure connection:', error);
     
     if (clientWs.readyState === WebSocket.OPEN) {
       clientWs.send(JSON.stringify({
@@ -192,21 +192,21 @@ wss.on('connection', (clientWs) => {
 
 // Handle WebSocket server errors
 wss.on('error', (error) => {
-  console.error('Server: WebSocket server error:', error);
+  console.error('WebSocket server error:', error);
 });
 
 // Start the server
 server.listen(PORT, () => {
   console.log('');
-  console.log('Server: Server is running!');
-  console.log(`Server: Open your browser to: http://localhost:${PORT}`);
+  console.log('Server is running!');
+  console.log(`Open your browser to: http://localhost:${PORT}`);
   console.log('');
   console.log('Press Ctrl+C to stop the server');
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\n\nServer: Shutting down gracefully...');
+  console.log('\n\nShutting down gracefully...');
   
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
@@ -215,18 +215,18 @@ process.on('SIGINT', () => {
   });
   
   server.close(() => {
-    console.log('Server: Server stopped');
+    console.log('Server stopped');
     process.exit(0);
   });
 });
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
-  console.error('Server: Uncaught exception:', error);
+  console.error('Uncaught exception:', error);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Server: Unhandled rejection at:', promise, 'reason:', reason);
+  console.error('Unhandled rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
