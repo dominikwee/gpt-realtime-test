@@ -3,56 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPT-4 Realtime API Trial</title>
+    <title>GPT Realtime Voice Chat</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>🎙️ GPT-4 Realtime API</h1>
-            <p class="subtitle">Voice conversation with Azure OpenAI</p>
-        </header>
-
-        <div class="status-bar">
-            <div class="status-indicator">
-                <span class="status-dot" id="statusDot"></span>
-                <span id="statusText">Disconnected</span>
-            </div>
+        <h1>GPT Realtime Voice Chat</h1>
+        
+        <div class="status">
+            <span id="status">Disconnected</span>
         </div>
 
         <div class="controls">
-            <button id="connectBtn" class="btn btn-primary">
-                <span class="btn-icon">🔌</span>
-                <span>Connect</span>
-            </button>
-            
-            <button id="micBtn" class="btn btn-mic" disabled>
-                <span class="btn-icon">🎤</span>
-                <span id="micBtnText">Start Recording</span>
-            </button>
+            <button id="connectBtn" class="btn btn-primary">Connect</button>
+            <button id="micBtn" class="btn btn-secondary" disabled>Start Recording</button>
         </div>
 
-        <div class="conversation-container">
-            <h2>Conversation</h2>
-            <div id="transcript" class="transcript">
-                <p class="empty-state">No messages yet. Connect and start recording to begin.</p>
-            </div>
+        <div class="transcript" id="transcript">
+            <p class="info">Click Connect to start</p>
         </div>
-
-        <div class="info-panel">
-            <h3>ℹ️ Instructions</h3>
-            <ol>
-                <li>Click <strong>"Connect"</strong> to establish connection to Azure OpenAI</li>
-                <li>Grant microphone permissions when prompted</li>
-                <li>Click <strong>"Start Recording"</strong> to begin speaking</li>
-                <li>Speak naturally - the AI will respond in real-time</li>
-                <li>Click <strong>"Stop Recording"</strong> when you're done</li>
-            </ol>
-        </div>
-
-        <footer>
-            <p>Powered by Azure OpenAI • Built with ❤️</p>
-        </footer>
     </div>
 
     <script src="app.js"></script>

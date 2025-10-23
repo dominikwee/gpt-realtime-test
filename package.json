@@ -2,6 +2,7 @@
   "name": "gpt-realtime-trial",
   "version": "1.0.0",
   "description": "Trial application for Azure OpenAI GPT-4 Realtime API",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -17,8 +18,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "openai": "^6.6.0",
     "ws": "^8.14.2"
   }
 }

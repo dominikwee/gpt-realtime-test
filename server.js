@@ -1,232 +1,86 @@
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
-const path = require('path');
+import express from 'express';
+import { WebSocketServer } from 'ws';
+import http from 'http';
+import dotenv from 'dotenv';
+import { OpenAIRealtimeWS } from 'openai/realtime/ws';
+import { AzureOpenAI } from 'openai';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Configuration
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config();
+
 const PORT = process.env.PORT || 3000;
 const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
 const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY;
 const AZURE_OPENAI_DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT;
 
-// Validate environment variables
 if (!AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_API_KEY || !AZURE_OPENAI_DEPLOYMENT) {
-  console.error('❌ Error: Missing required environment variables');
-  console.error('Please set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, and AZURE_OPENAI_DEPLOYMENT in your .env file');
+  console.error('Missing environment variables');
   process.exit(1);
 }
 
-// Create Express app
+console.log('Starting server...');
+console.log('Endpoint:', AZURE_OPENAI_ENDPOINT);
+console.log('Deployment:', AZURE_OPENAI_DEPLOYMENT);
+console.log('');
+
 const app = express();
 const server = http.createServer(app);
-
-// Serve static files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running' });
-});
+const wss = new WebSocketServer({ server });
 
-// Create WebSocket server for client connections
-const wss = new WebSocket.Server({ server, path: '/realtime' });
-
-console.log('Starting GPT Realtime API Server...');
-console.log(`Azure Endpoint: ${AZURE_OPENAI_ENDPOINT}`);
-console.log(`Deployment: ${AZURE_OPENAI_DEPLOYMENT}`);
-
-// Handle WebSocket connections from browser clients
-wss.on('connection', (clientWs) => {
+wss.on('connection', async (clientWs) => {
   console.log('Client connected');
-  
-  let azureWs = null;
-  let isAzureConnected = false;
-
-  // Construct Azure OpenAI Realtime API URL
-  // For newer gpt-realtime models (2025-08-28), use the 2025-04-01-preview API version
-  const apiVersion = '2025-04-01-preview';
-  const azureUrl = `${AZURE_OPENAI_ENDPOINT.replace('https://', 'wss://')}/openai/realtime?api-version=${apiVersion}&deployment=${AZURE_OPENAI_DEPLOYMENT}`;
-  
-  console.log('Connecting to Azure OpenAI Realtime API...');
-  console.log('URL:', azureUrl.replace(AZURE_OPENAI_API_KEY, '***'));
-  console.log('API Version:', apiVersion);
-  console.log('Deployment:', AZURE_OPENAI_DEPLOYMENT);
+  let azureRT = null;
 
   try {
-    // Create WebSocket connection to Azure OpenAI
-    azureWs = new WebSocket(azureUrl, {
-      headers: {
-        'api-key': AZURE_OPENAI_API_KEY,
-        'OpenAI-Beta': 'realtime=v1'
+    const azureClient = new AzureOpenAI({
+      endpoint: AZURE_OPENAI_ENDPOINT,
+      apiKey: AZURE_OPENAI_API_KEY,
+      apiVersion: '2025-04-01-preview',
+      deployment: AZURE_OPENAI_DEPLOYMENT
+    });
+
+    azureRT = await OpenAIRealtimeWS.azure(azureClient);
+
+    azureRT.socket.on('open', () => {
+      console.log('Connected to Azure');
+      clientWs.send(JSON.stringify({ type: 'connection', status: 'connected' }));
+    });
+
+    azureRT.on('event', (event) => {
+      console.log('Azure ->', event.type);
+      if (clientWs.readyState === 1) {
+        clientWs.send(JSON.stringify(event));
       }
     });
 
-    // Azure WebSocket opened
-    azureWs.on('open', () => {
-      console.log('Connected to Azure OpenAI Realtime API');
-      isAzureConnected = true;
-      
-      // Notify client that connection is established
-      clientWs.send(JSON.stringify({
-        type: 'connection',
-        status: 'connected',
-        message: 'Connected to Azure OpenAI Realtime API'
-      }));
-      
-      console.log('Waiting for session.created event from Azure...');
-    });
+    azureRT.on('error', (err) => console.error('Azure error:', err.message));
+    azureRT.socket.on('close', () => console.log('Azure disconnected'));
 
-    // Forward messages from Azure to client
-    azureWs.on('message', (data) => {
-      try {
-        // Convert Buffer/Blob to string before parsing
-        const dataString = data.toString();
-        const message = JSON.parse(dataString);
-        
-        console.log(`Azure -> Client: ${message.type}`);
-        
-        if (message.type === 'error') {
-          console.error('Azure error:', message.error || message);
-        } else if (message.type === 'session.created') {
-          console.log('Session created:', message.session?.id);
-          console.log('Voice:', message.session?.voice);
-          console.log('Modalities:', message.session?.modalities);
-        } else if (message.type === 'session.updated') {
-          console.log('Session updated successfully');
-        } else if (message.type === 'response.done') {
-          console.log('Response completed');
-        } else if (message.type === 'input_audio_buffer.speech_started') {
-          console.log('Speech detected');
-        } else if (message.type === 'input_audio_buffer.speech_stopped') {
-          console.log('Speech stopped');
-        }
-        
-        // Forward the string data to client
-        if (clientWs.readyState === WebSocket.OPEN) {
-          clientWs.send(dataString);
-        }
-      } catch (error) {
-        console.error('Error forwarding message from Azure:', error);
-      }
-    });
-
-    // Handle Azure WebSocket errors
-    azureWs.on('error', (error) => {
-      console.error('Azure WebSocket error:', error.message);
-      
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(JSON.stringify({
-          type: 'error',
-          message: `Azure connection error: ${error.message}`
-        }));
-      }
-    });
-
-    // Handle Azure WebSocket closure
-    azureWs.on('close', (code, reason) => {
-      console.log(`Azure WebSocket closed (code: ${code})`);
-      isAzureConnected = false;
-      
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(JSON.stringify({
-          type: 'connection',
-          status: 'disconnected',
-          message: 'Disconnected from Azure OpenAI'
-        }));
-        clientWs.close();
-      }
-    });
-
-    // Forward messages from client to Azure
     clientWs.on('message', (data) => {
-      try {
-        if (azureWs && isAzureConnected && azureWs.readyState === WebSocket.OPEN) {
-          azureWs.send(data);
-          
-          // Log message types (optional, for debugging)
-          const message = JSON.parse(data.toString());
-          if (message.type === 'session.update') {
-            console.log('Session update sent');
-          } else if (message.type === 'input_audio_buffer.append') {
-            // Don't log audio chunks (too verbose)
-          } else if (message.type === 'input_audio_buffer.commit') {
-            console.log('Audio buffer committed');
-          } else if (message.type === 'response.create') {
-            console.log('Response creation requested');
-          }
-        } else {
-          console.warn('Cannot send message - Azure connection not ready');
-        }
-      } catch (error) {
-        console.error('Error forwarding message to Azure:', error);
-      }
-    });
-
-    // Handle client disconnection
-    clientWs.on('close', () => {
-      console.log('Client disconnected');
-      
-      if (azureWs && azureWs.readyState === WebSocket.OPEN) {
-        azureWs.close();
-      }
-    });
-
-    // Handle client errors
-    clientWs.on('error', (error) => {
-      console.error('Client WebSocket error:', error.message);
+      const msg = JSON.parse(data);
+      console.log('Client ->', msg.type);
+      azureRT.send(msg);
     });
 
   } catch (error) {
-    console.error('Failed to establish Azure connection:', error);
-    
-    if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send(JSON.stringify({
-        type: 'error',
-        message: `Failed to connect to Azure: ${error.message}`
-      }));
-      clientWs.close();
-    }
+    console.error('Connection failed:', error.message);
+    clientWs.send(JSON.stringify({ type: 'error', message: error.message }));
   }
+
+  clientWs.on('close', () => {
+    console.log('Client disconnected');
+    if (azureRT) azureRT.close();
+  });
 });
 
-// Handle WebSocket server errors
-wss.on('error', (error) => {
-  console.error('WebSocket server error:', error);
-});
+server.listen(PORT, () => console.log('Server running on http://localhost:' + PORT));
 
-// Start the server
-server.listen(PORT, () => {
-  console.log('');
-  console.log('Server is running!');
-  console.log(`Open your browser to: http://localhost:${PORT}`);
-  console.log('');
-  console.log('Press Ctrl+C to stop the server');
-});
-
-// Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\n\nShutting down gracefully...');
-  
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.close();
-    }
-  });
-  
-  server.close(() => {
-    console.log('Server stopped');
-    process.exit(0);
-  });
-});
-
-// Handle uncaught errors
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught exception:', error);
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled rejection at:', promise, 'reason:', reason);
-  process.exit(1);
+  console.log('\nShutting down...');
+  server.close(() => process.exit(0));
 });

@@ -1,122 +1,94 @@
-// DOM Elements
-const connectBtn = document.getElementById('connectBtn');
-const micBtn = document.getElementById('micBtn');
-const micBtnText = document.getElementById('micBtnText');
-const statusDot = document.getElementById('statusDot');
-const statusText = document.getElementById('statusText');
-const transcript = document.getElementById('transcript');
-
-// State
+// WebSocket connection
 let ws = null;
 let audioContext = null;
 let mediaStream = null;
-let audioWorkletNode = null;
-let isRecording = false;
-let isConnected = false;
 
-// Audio playback queue
-let audioQueue = [];
-let isPlaying = false;
+// UI Elements
+const connectBtn = document.getElementById('connectBtn');
+const micBtn = document.getElementById('micBtn');
+const statusEl = document.getElementById('status');
+const transcriptEl = document.getElementById('transcript');
 
-// Initialize
-init();
-
-function init() {
-    connectBtn.addEventListener('click', toggleConnection);
-    micBtn.addEventListener('click', toggleRecording);
-}
-
-// Connection Management
-async function toggleConnection() {
-    if (isConnected) {
-        disconnect();
-    } else {
-        await connect();
-    }
-}
-
-async function connect() {
-    try {
-        updateStatus('connecting', 'Connecting...');
-        connectBtn.disabled = true;
-
-        // Create WebSocket connection to our server
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/realtime`;
-        
-        ws = new WebSocket(wsUrl);
-
-        ws.onopen = () => {
-            console.log('WebSocket connected');
-            updateStatus('connected', 'Connected');
-            isConnected = true;
-            connectBtn.innerHTML = '<span class="btn-icon">🔌</span><span>Disconnect</span>';
-            connectBtn.disabled = false;
-            micBtn.disabled = false;
-            
-            // Don't initialize session immediately - wait for session.created event
-            addMessage('system', 'Client: Connected to Azure OpenAI. Waiting for session...');
-        };
-
-        ws.onmessage = async (event) => {
-            try {
-                const message = JSON.parse(event.data);
-                await handleServerMessage(message);
-            } catch (error) {
-                console.error('Error handling message:', error);
-            }
-        };
-
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-            addMessage('system', 'Connection error occurred');
-        };
-
-        ws.onclose = () => {
-            console.log('WebSocket closed');
-            disconnect();
-        };
-
-    } catch (error) {
-        console.error('Connection error:', error);
-        updateStatus('disconnected', 'Connection failed');
-        addMessage('error', `Connection failed: ${error.message}`);
-        connectBtn.disabled = false;
-    }
-}
-
-function disconnect() {
-    if (isRecording) {
-        stopRecording();
-    }
-
-    if (ws) {
+// Connect to server
+connectBtn.addEventListener('click', () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
         ws.close();
-        ws = null;
+        return;
     }
 
-    if (audioContext) {
-        audioContext.close();
-        audioContext = null;
-    }
+    ws = new WebSocket(`ws://${window.location.host}`);
 
-    isConnected = false;
-    updateStatus('disconnected', 'Disconnected');
-    connectBtn.innerHTML = '<span class="btn-icon">🔌</span><span>Connect</span>';
-    connectBtn.disabled = false;
-    micBtn.disabled = true;
+    ws.onopen = () => {
+        console.log('WebSocket connected');
+        statusEl.textContent = 'Connecting to Azure...';
+    };
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        console.log('Received:', msg.type);
+        handleMessage(msg);
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        addMessage('error', 'Connection error');
+    };
+
+    ws.onclose = () => {
+        console.log('WebSocket closed');
+        statusEl.textContent = 'Disconnected';
+        statusEl.classList.remove('connected');
+        connectBtn.textContent = 'Connect';
+        micBtn.disabled = true;
+    };
+});
+
+// Handle messages from server
+function handleMessage(msg) {
+    switch (msg.type) {
+        case 'connection':
+            if (msg.status === 'connected') {
+                statusEl.textContent = 'Connected';
+                statusEl.classList.add('connected');
+                connectBtn.textContent = 'Disconnect';
+                micBtn.disabled = false;
+                clearTranscript();
+                addMessage('info', 'Connected! Waiting for session...');
+            }
+            break;
+
+        case 'session.created':
+            addMessage('info', `Session started: ${msg.session.id}`);
+            // Send session config
+            sendSessionConfig();
+            break;
+
+        case 'session.updated':
+            addMessage('info', 'Session configured successfully!');
+            break;
+
+        case 'error':
+            addMessage('error', msg.error?.message || msg.message || 'An error occurred');
+            break;
+
+        case 'response.audio_transcript.delta':
+            addMessage('assistant', msg.delta);
+            break;
+
+        case 'conversation.item.input_audio_transcription.completed':
+            addMessage('user', msg.transcript);
+            break;
+    }
 }
 
-// Session Initialization
-function initializeSession() {
-    console.log('Initializing session configuration...');
-    
-    const sessionConfig = {
+// Send session configuration
+function sendSessionConfig() {
+    const config = {
         type: 'session.update',
         session: {
             modalities: ['text', 'audio'],
-            instructions: 'You are a helpful AI assistant. Please speak clearly and naturally.',
             voice: 'alloy',
+            instructions: 'You are a helpful assistant.',
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: {
@@ -126,70 +98,55 @@ function initializeSession() {
                 type: 'server_vad',
                 threshold: 0.5,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 500
-            },
-            temperature: 0.8
+                silence_duration_ms: 200
+            }
         }
     };
 
-    console.log('Sending session config:', JSON.stringify(sessionConfig, null, 2));
-    sendMessage(sessionConfig);
+    console.log('Sending session config');
+    ws.send(JSON.stringify(config));
 }
 
-// Audio Recording
-async function toggleRecording() {
-    if (isRecording) {
+// Microphone handling
+micBtn.addEventListener('click', async () => {
+    if (mediaStream) {
         stopRecording();
-    } else {
-        await startRecording();
+        return;
     }
-}
+
+    try {
+        await startRecording();
+    } catch (error) {
+        console.error('Microphone error:', error);
+        addMessage('error', 'Failed to access microphone');
+    }
+});
 
 async function startRecording() {
-    try {
-        // Request microphone access
-        mediaStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-                channelCount: 1,
-                sampleRate: 24000,
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            } 
-        });
+    audioContext = new AudioContext({ sampleRate: 24000 });
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-        // Create audio context
-        audioContext = new AudioContext({ sampleRate: 24000 });
-        const source = audioContext.createMediaStreamSource(mediaStream);
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
 
-        // Create audio processor
-        await audioContext.audioWorklet.addModule(getAudioProcessorCode());
-        audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
+    processor.onaudioprocess = (e) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            const inputData = e.inputBuffer.getChannelData(0);
+            const pcm16 = convertToPCM16(inputData);
+            
+            ws.send(JSON.stringify({
+                type: 'input_audio_buffer.append',
+                audio: arrayBufferToBase64(pcm16)
+            }));
+        }
+    };
 
-        // Handle processed audio data
-        audioWorkletNode.port.onmessage = (event) => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const audioData = arrayBufferToBase64(event.data);
-                sendMessage({
-                    type: 'input_audio_buffer.append',
-                    audio: audioData
-                });
-            }
-        };
+    source.connect(processor);
+    processor.connect(audioContext.destination);
 
-        // Connect nodes
-        source.connect(audioWorkletNode);
-        audioWorkletNode.connect(audioContext.destination);
-
-        isRecording = true;
-        micBtn.classList.add('recording');
-        micBtnText.textContent = 'Stop Recording';
-        addMessage('system', 'Recording started - speak now!');
-
-    } catch (error) {
-        console.error('Error starting recording:', error);
-        addMessage('error', `Microphone error: ${error.message}`);
-    }
+    micBtn.textContent = 'Stop Recording';
+    micBtn.classList.add('recording');
+    addMessage('info', 'Recording...');
 }
 
 function stopRecording() {
@@ -197,262 +154,44 @@ function stopRecording() {
         mediaStream.getTracks().forEach(track => track.stop());
         mediaStream = null;
     }
-
-    if (audioWorkletNode) {
-        audioWorkletNode.disconnect();
-        audioWorkletNode = null;
+    if (audioContext) {
+        audioContext.close();
+        audioContext = null;
     }
-
-    isRecording = false;
+    micBtn.textContent = 'Start Recording';
     micBtn.classList.remove('recording');
-    micBtnText.textContent = 'Start Recording';
-    addMessage('system', 'Recording stopped');
+    addMessage('info', 'Recording stopped');
 }
 
-// Audio Processor Code (inline)
-function getAudioProcessorCode() {
-    const processorCode = `
-        class AudioProcessor extends AudioWorkletProcessor {
-            constructor() {
-                super();
-                this.bufferSize = 4800; // 200ms at 24kHz
-                this.buffer = new Float32Array(this.bufferSize);
-                this.bufferIndex = 0;
-            }
-
-            process(inputs, outputs, parameters) {
-                const input = inputs[0];
-                if (input.length > 0) {
-                    const inputChannel = input[0];
-                    
-                    for (let i = 0; i < inputChannel.length; i++) {
-                        this.buffer[this.bufferIndex++] = inputChannel[i];
-                        
-                        if (this.bufferIndex >= this.bufferSize) {
-                            // Convert Float32 to Int16 PCM
-                            const pcm16 = new Int16Array(this.bufferSize);
-                            for (let j = 0; j < this.bufferSize; j++) {
-                                const s = Math.max(-1, Math.min(1, this.buffer[j]));
-                                pcm16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                            }
-                            
-                            this.port.postMessage(pcm16.buffer);
-                            this.bufferIndex = 0;
-                        }
-                    }
-                }
-                
-                return true;
-            }
-        }
-
-        registerProcessor('audio-processor', AudioProcessor);
-    `;
-
-    const blob = new Blob([processorCode], { type: 'application/javascript' });
-    return URL.createObjectURL(blob);
-}
-
-// Audio Playback
-async function playAudio(base64Audio) {
-    try {
-        if (!audioContext) {
-            audioContext = new AudioContext({ sampleRate: 24000 });
-        }
-
-        // Decode base64 to PCM16
-        const binaryString = atob(base64Audio);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        // Convert Int16 PCM to Float32
-        const pcm16 = new Int16Array(bytes.buffer);
-        const float32 = new Float32Array(pcm16.length);
-        for (let i = 0; i < pcm16.length; i++) {
-            float32[i] = pcm16[i] / (pcm16[i] < 0 ? 0x8000 : 0x7FFF);
-        }
-
-        // Create audio buffer
-        const audioBuffer = audioContext.createBuffer(1, float32.length, 24000);
-        audioBuffer.getChannelData(0).set(float32);
-
-        // Add to queue
-        audioQueue.push(audioBuffer);
-        
-        // Start playing if not already playing
-        if (!isPlaying) {
-            playNextInQueue();
-        }
-
-    } catch (error) {
-        console.error('Error playing audio:', error);
+// Audio conversion helpers
+function convertToPCM16(float32Array) {
+    const buffer = new ArrayBuffer(float32Array.length * 2);
+    const view = new DataView(buffer);
+    for (let i = 0; i < float32Array.length; i++) {
+        const s = Math.max(-1, Math.min(1, float32Array[i]));
+        view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
     }
-}
-
-function playNextInQueue() {
-    if (audioQueue.length === 0) {
-        isPlaying = false;
-        return;
-    }
-
-    isPlaying = true;
-    const audioBuffer = audioQueue.shift();
-
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-    
-    source.onended = () => {
-        playNextInQueue();
-    };
-
-    source.start();
-}
-
-// Message Handling
-async function handleServerMessage(message) {
-    console.log('Received:', message.type, message);
-
-    switch (message.type) {
-        case 'connection':
-            if (message.status === 'connected') {
-                addMessage('system', message.message);
-            } else if (message.status === 'disconnected') {
-                addMessage('system', 'Disconnected from Azure OpenAI');
-                disconnect();
-            }
-            break;
-
-        case 'session.created':
-            console.log('Session created:', message.session);
-            addMessage('system', 'Session created! Configuring...');
-            // Initialize session configuration
-            initializeSession();
-            break;
-
-        case 'session.updated':
-            console.log('Session updated');
-            addMessage('system', 'Session ready! You can now start recording.');
-            break;
-
-        case 'conversation.item.created':
-            console.log('Conversation item created');
-            break;
-
-        case 'input_audio_buffer.speech_started':
-            addMessage('system', 'Speech detected...');
-            break;
-
-        case 'input_audio_buffer.speech_stopped':
-            console.log('Speech stopped');
-            break;
-
-        case 'input_audio_buffer.committed':
-            console.log('Audio buffer committed');
-            break;
-
-        case 'conversation.item.input_audio_transcription.completed':
-            if (message.transcript) {
-                addMessage('user', message.transcript);
-            }
-            break;
-
-        case 'response.created':
-            console.log('Response created');
-            break;
-
-        case 'response.output_item.added':
-            console.log('Output item added');
-            break;
-
-        case 'response.content_part.added':
-            console.log('Content part added');
-            break;
-
-        case 'response.audio_transcript.delta':
-            // Handle streaming transcript
-            break;
-
-        case 'response.audio.delta':
-            if (message.delta) {
-                await playAudio(message.delta);
-            }
-            break;
-
-        case 'response.audio_transcript.done':
-            if (message.transcript) {
-                addMessage('assistant', message.transcript);
-            }
-            break;
-
-        case 'response.done':
-            console.log('Response completed');
-            break;
-
-        case 'error':
-            console.error('Error from server:', message);
-            addMessage('error', message.message || 'An error occurred');
-            break;
-
-        default:
-            console.log('Unhandled message type:', message.type);
-    }
-}
-
-// Helper Functions
-function sendMessage(message) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(message));
-    }
-}
-
-function updateStatus(status, text) {
-    statusDot.className = 'status-dot ' + status;
-    statusText.textContent = text;
-}
-
-function addMessage(type, content) {
-    // Remove empty state if present
-    const emptyState = transcript.querySelector('.empty-state');
-    if (emptyState) {
-        emptyState.remove();
-    }
-
-    const messageEl = document.createElement('div');
-    messageEl.className = `message ${type}`;
-    
-    const headerEl = document.createElement('div');
-    headerEl.className = 'message-header';
-    headerEl.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-    
-    const contentEl = document.createElement('div');
-    contentEl.className = 'message-content';
-    contentEl.textContent = content;
-    
-    messageEl.appendChild(headerEl);
-    messageEl.appendChild(contentEl);
-    transcript.appendChild(messageEl);
-    
-    // Scroll to bottom
-    transcript.scrollTop = transcript.scrollHeight;
+    return buffer;
 }
 
 function arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
     let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
+    for (let i = 0; i < bytes.byteLength; i++) {
         binary += String.fromCharCode(bytes[i]);
     }
     return btoa(binary);
 }
 
-// Error handling
-window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
-});
+// UI helpers
+function addMessage(type, text) {
+    const msgEl = document.createElement('div');
+    msgEl.className = `message ${type}`;
+    msgEl.textContent = text;
+    transcriptEl.appendChild(msgEl);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+}
 
-window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
-});
+function clearTranscript() {
+    transcriptEl.innerHTML = '';
+}

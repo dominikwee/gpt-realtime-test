@@ -1,19 +1,20 @@
-# GPT-4 Realtime API Trial - Implementation Plan
+# GPT Realtime API - Implementation
 
 ## Overview
-Build a web-based trial application to test Azure OpenAI's GPT-4 Realtime API for voice-based conversations.
+Web-based voice chat application using Azure OpenAI GPT Realtime API with the official OpenAI Node.js SDK.
 
-## Prerequisites
-- Azure OpenAI resource with GPT-4 Realtime API access
-- Node.js (v18 or higher)
-- Modern web browser with microphone access
+## Technology Stack
+- **Backend**: Node.js with Express + OpenAI SDK (`openai/realtime/ws`)
+- **Frontend**: Vanilla JavaScript with Web Audio API
+- **Model**: `gpt-realtime` (2025-08-28) on Azure OpenAI
+- **API Version**: `2025-04-01-preview`
 
 ## Architecture
 ```
 ┌─────────────────┐         ┌──────────────────┐         ┌─────────────────────┐
 │   Web Browser   │ ◄────── │  Express Server  │ ◄────── │ Azure OpenAI        │
-│   (HTML/JS)     │  HTTPS  │  (Node.js)       │ WSS     │ Realtime API        │
-│   + Microphone  │         │                  │         │                     │
+│   (HTML/JS)     │   WS    │  + OpenAI SDK    │   WS    │ gpt-realtime        │
+│   + Microphone  │         │  (Proxy)         │         │                     │
 └─────────────────┘         └──────────────────┘         └─────────────────────┘
 ```
 
@@ -47,56 +48,40 @@ Build a web-based trial application to test Azure OpenAI's GPT-4 Realtime API fo
    - Relay messages between browser and Azure
    - Handle connection errors and reconnection
 
-### Phase 3: Frontend Development
-5. **Create HTML Interface** (`public/index.html`)
-   - Microphone button (Start/Stop)
-   - Audio visualization (optional)
-   - Conversation transcript display
-   - Status indicators (connecting, connected, error)
-   - Audio playback for AI responses
+## Implementation
 
-6. **Implement Client-Side Logic** (`public/app.js`)
-   - WebSocket connection management
-   - Audio capture from microphone
-   - Convert audio to required format (PCM 16-bit, 24kHz)
-   - Send audio chunks to server via WebSocket
-   - Receive and play AI audio responses
-   - Display conversation transcript
-   - Handle errors gracefully
+### Backend (`server.js`)
+- Express server with WebSocket support
+- Uses official `OpenAIRealtimeWS.azure()` SDK method
+- Proxies WebSocket connection between browser and Azure
+- Forwards all events bidirectionally
+- Simple, clean code (~90 lines)
 
-### Phase 4: Audio Processing
-7. **Audio Input Processing**
-   - Use Web Audio API to capture microphone
-   - Create AudioContext and MediaStreamSource
-   - Implement ScriptProcessorNode or AudioWorklet
-   - Convert Float32 audio to Int16 PCM
-   - Chunk audio data appropriately
+### Frontend (`public/`)
+**index.html**: Simple UI with Connect and Recording buttons
+**styles.css**: Modern gradient design
+**app.js**: 
+- WebSocket client connection
+- Microphone capture with Web Audio API
+- PCM16 audio conversion at 24kHz
+- Session configuration with server VAD
+- Event handling for transcripts and responses
 
-8. **Audio Output Processing**
-   - Receive base64-encoded audio from API
-   - Decode and queue audio chunks
-   - Play audio smoothly using Web Audio API
-   - Handle audio interruptions
+## Key Features
+✅ Official OpenAI SDK integration
+✅ Clean proxy architecture
+✅ Voice activity detection (server-side)
+✅ Audio transcription with Whisper
+✅ Real-time audio streaming
+✅ Simple, maintainable codebase
 
-### Phase 5: API Integration
-9. **Implement Realtime API Protocol**
-   - Session initialization
-   - Configure conversation parameters:
-     - Voice selection (alloy, echo, shimmer, etc.)
-     - Turn detection mode (server_vad)
-     - Audio format (pcm16)
-   - Send conversation items
-   - Handle events:
-     - `session.created`
-     - `conversation.item.created`
-     - `response.audio.delta`
-     - `response.done`
-     - `error`
-
-10. **Error Handling & Recovery**
-    - Connection retry logic
-    - API error messages display
-    - Graceful degradation
+## Configuration
+Session setup in `app.js`:
+- Voice: `alloy`
+- Modalities: `text` + `audio`
+- VAD: `server_vad` with 200ms silence detection
+- Audio format: `pcm16` at 24kHz
+- Transcription: `whisper-1`
     - User feedback for all states
 
 ### Phase 6: Testing & Documentation
@@ -112,57 +97,43 @@ Build a web-based trial application to test Azure OpenAI's GPT-4 Realtime API fo
     - Azure OpenAI configuration guide
     - Usage instructions
     - Troubleshooting guide
-    - API limitations and costs
+## Current Status
 
-## Key Features to Implement
+### Completed ✅
+- [x] Server setup with OpenAI SDK
+- [x] Azure OpenAI connection working
+- [x] WebSocket proxy implementation
+- [x] Client UI (HTML/CSS)
+- [x] Microphone capture
+- [x] Audio conversion (Float32 → PCM16)
+- [x] Session configuration
+- [x] Event handling structure
 
-### MVP (Minimum Viable Product)
-- [ ] Connect to Azure OpenAI Realtime API
-- [ ] Capture audio from microphone
-- [ ] Send audio to API in real-time
-- [ ] Receive and play AI responses
-- [ ] Display text transcript
-- [ ] Basic error handling
+### Working
+- Session creation and configuration
+- WebSocket communication
+- Audio streaming to Azure
 
-### Nice-to-Have
-- [ ] Voice activity detection visualization
-- [ ] Conversation history save/load
-- [ ] Multiple voice options
-- [ ] Adjustable parameters (temperature, etc.)
-- [ ] Session recording
-- [ ] Multi-language support
+### To Test
+- [ ] Full voice conversation flow
+- [ ] Audio playback from AI
+- [ ] Transcript display
+- [ ] Error recovery
 
-## Technical Considerations
-
-### Security
-- Never expose API keys in frontend code
-- Use environment variables
-- Implement rate limiting
-- Add CORS protection
-
-### Performance
-- Optimize audio chunk sizes (e.g., 100ms chunks)
-- Implement buffering for smooth playback
-- Minimize latency in audio pipeline
-- Handle network interruptions
-
-### User Experience
-- Clear visual feedback for all states
-- Intuitive controls
-- Error messages in plain language
-- Mobile-responsive design (optional)
-
-## Azure OpenAI Realtime API Specifics
-
-### Endpoint Format
-```
-wss://{your-resource-name}.openai.azure.com/openai/realtime?api-version=2024-10-01-preview&deployment={deployment-name}
+## Usage
+```bash
+npm start
+# Open http://localhost:3000
+# Click "Connect"
+# Click "Start Recording"
+# Speak to the AI
 ```
 
-### Authentication
-- Use `api-key` header with your Azure OpenAI API key
-
-### Audio Format Requirements
+## Important Notes
+- Uses `gpt-realtime` model (NOT `gpt-4o-realtime-preview`)
+- API version MUST be `2025-04-01-preview`
+- SDK handles authentication automatically
+- Audio format: PCM16 at 24kHz mono
 - **Input**: PCM 16-bit mono, 24kHz sample rate
 - **Output**: PCM 16-bit mono, 24kHz sample rate (base64 encoded)
 
@@ -176,34 +147,12 @@ wss://{your-resource-name}.openai.azure.com/openai/realtime?api-version=2024-10-
    ```bash
    npm install
    npm run dev
-   ```
-
-2. **Testing**
-   - Open browser to `https://localhost:3000`
-   - Accept self-signed certificate warning
-   - Grant microphone permissions
-   - Start conversation
-
-3. **Debugging**
-   - Use browser DevTools Console
-   - Check WebSocket messages
-   - Monitor Network tab
-   - Review server logs
-
-## Next Steps After MVP
-1. Deploy to Azure App Service or similar
-2. Add authentication for users
-3. Implement conversation analytics
-4. Add custom system prompts
-5. Integration with other services
-
 ## Resources
-- [Azure OpenAI Realtime API Documentation](https://learn.microsoft.com/azure/ai-services/openai/how-to/realtime)
+- [Azure OpenAI Realtime API Documentation](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/realtime-audio)
+- [OpenAI Node.js SDK - Realtime](https://github.com/openai/openai-node/tree/main/examples/azure/realtime)
 - [Web Audio API Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
-- [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
 
 ---
 
-**Status**: Ready to implement
-**Estimated Time**: 4-6 hours for MVP
-**Last Updated**: October 20, 2025
+**Status**: Core implementation complete
+**Last Updated**: October 23, 2025
