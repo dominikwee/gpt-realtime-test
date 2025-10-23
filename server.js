@@ -80,28 +80,31 @@ wss.on('connection', (clientWs) => {
     // Forward messages from Azure to client
     azureWs.on('message', (data) => {
       try {
+        // Convert Buffer/Blob to string before parsing
+        const dataString = data.toString();
+        const message = JSON.parse(dataString);
+        
+        console.log(`Server: Azure -> Client: ${message.type}`);
+        
+        if (message.type === 'error') {
+          console.error('Server: Azure error:', message.error || message);
+        } else if (message.type === 'session.created') {
+          console.log('Server: Session created:', message.session?.id);
+          console.log('Server: Voice:', message.session?.voice);
+          console.log('Server: Modalities:', message.session?.modalities);
+        } else if (message.type === 'session.updated') {
+          console.log('Server: Session updated successfully');
+        } else if (message.type === 'response.done') {
+          console.log('Server: Response completed');
+        } else if (message.type === 'input_audio_buffer.speech_started') {
+          console.log('Server: Speech detected');
+        } else if (message.type === 'input_audio_buffer.speech_stopped') {
+          console.log('Server: Speech stopped');
+        }
+        
+        // Forward the string data to client
         if (clientWs.readyState === WebSocket.OPEN) {
-          clientWs.send(data);
-          
-          // Log important events (optional, for debugging)
-          const message = JSON.parse(data.toString());
-          console.log(`Server: Azure -> Client: ${message.type}`);
-          
-          if (message.type === 'error') {
-            console.error('Server: Azure error:', message.error || message);
-          } else if (message.type === 'session.created') {
-            console.log('Server: Session created:', message.session?.id);
-            console.log('Server: Voice:', message.session?.voice);
-            console.log('Server: Modalities:', message.session?.modalities);
-          } else if (message.type === 'session.updated') {
-            console.log('Server: Session updated successfully');
-          } else if (message.type === 'response.done') {
-            console.log('Server: Response completed');
-          } else if (message.type === 'input_audio_buffer.speech_started') {
-            console.log('Server: Speech detected');
-          } else if (message.type === 'input_audio_buffer.speech_stopped') {
-            console.log('Server: Speech stopped');
-          }
+          clientWs.send(dataString);
         }
       } catch (error) {
         console.error('Server: Error forwarding message from Azure:', error);
