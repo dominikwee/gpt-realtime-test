@@ -6,6 +6,7 @@ let mediaStream = null;
 // UI Elements
 const connectBtn = document.getElementById('connectBtn');
 const micBtn = document.getElementById('micBtn');
+const clearBtn = document.getElementById('clearBtn');
 const statusEl = document.getElementById('status');
 const transcriptEl = document.getElementById('transcript');
 
@@ -43,6 +44,13 @@ connectBtn.addEventListener('click', () => {
     };
 });
 
+// Clear transcript button
+clearBtn.addEventListener('click', () => {
+    if (confirm('Clear the conversation transcript?')) {
+        clearTranscript();
+    }
+});
+
 // Handle messages from server
 function handleMessage(msg) {
     switch (msg.type) {
@@ -72,11 +80,39 @@ function handleMessage(msg) {
             break;
 
         case 'response.audio_transcript.delta':
-            addMessage('assistant', msg.delta);
+            // Accumulate assistant transcript deltas
+            if (!window.currentAssistantMessage) {
+                window.currentAssistantMessage = '';
+                showTypingIndicator();
+            }
+            window.currentAssistantMessage += msg.delta;
+            updateOrAddMessage('assistant', window.currentAssistantMessage);
+            break;
+
+        case 'response.audio_transcript.done':
+            // Finalize assistant message
+            hideTypingIndicator();
+            if (window.currentAssistantMessage) {
+                finalizeMessage('assistant', window.currentAssistantMessage);
+                window.currentAssistantMessage = '';
+            }
             break;
 
         case 'conversation.item.input_audio_transcription.completed':
             addMessage('user', msg.transcript);
+            break;
+
+        case 'conversation.item.input_audio_transcription.failed':
+            addMessage('error', 'Failed to transcribe audio');
+            break;
+
+        case 'response.done':
+            // Add a separator after AI response is complete
+            hideTypingIndicator();
+            if (window.currentAssistantMessage) {
+                finalizeMessage('assistant', window.currentAssistantMessage);
+                window.currentAssistantMessage = '';
+            }
             break;
     }
 }
@@ -188,10 +224,52 @@ function addMessage(type, text) {
     const msgEl = document.createElement('div');
     msgEl.className = `message ${type}`;
     msgEl.textContent = text;
+    msgEl.setAttribute('data-message-id', Date.now());
     transcriptEl.appendChild(msgEl);
     transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
 
+function updateOrAddMessage(type, text) {
+    // Find the last message of this type or create a new one
+    const lastMessage = transcriptEl.querySelector(`.message.${type}:last-child`);
+    if (lastMessage && !lastMessage.hasAttribute('data-finalized')) {
+        lastMessage.textContent = text;
+    } else {
+        const msgEl = document.createElement('div');
+        msgEl.className = `message ${type}`;
+        msgEl.textContent = text;
+        msgEl.setAttribute('data-message-id', Date.now());
+        transcriptEl.appendChild(msgEl);
+    }
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+}
+
+function finalizeMessage(type, text) {
+    const lastMessage = transcriptEl.querySelector(`.message.${type}:last-child`);
+    if (lastMessage) {
+        lastMessage.textContent = text;
+        lastMessage.setAttribute('data-finalized', 'true');
+    }
+}
+
 function clearTranscript() {
-    transcriptEl.innerHTML = '';
+    transcriptEl.innerHTML = '<p class="info">Connected! Start speaking...</p>';
+    window.currentAssistantMessage = '';
+}
+
+function showTypingIndicator() {
+    hideTypingIndicator(); // Remove any existing indicator
+    const indicator = document.createElement('div');
+    indicator.className = 'message assistant typing-indicator';
+    indicator.innerHTML = '<span class="typing-dots">AI is responding<span class="dots">...</span></span>';
+    indicator.setAttribute('data-typing', 'true');
+    transcriptEl.appendChild(indicator);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    const indicator = transcriptEl.querySelector('[data-typing="true"]');
+    if (indicator) {
+        indicator.remove();
+    }
 }
