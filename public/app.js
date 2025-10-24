@@ -6,6 +6,7 @@ let mediaStream = null;
 // UI Elements
 const connectBtn = document.getElementById('connectBtn');
 const micBtn = document.getElementById('micBtn');
+const testBtn = document.getElementById('testBtn');
 const clearBtn = document.getElementById('clearBtn');
 const statusEl = document.getElementById('status');
 const transcriptEl = document.getElementById('transcript');
@@ -41,6 +42,7 @@ connectBtn.addEventListener('click', () => {
         statusEl.classList.remove('connected');
         connectBtn.textContent = 'Connect';
         micBtn.disabled = true;
+        testBtn.disabled = true;
     };
 });
 
@@ -48,6 +50,33 @@ connectBtn.addEventListener('click', () => {
 clearBtn.addEventListener('click', () => {
     if (confirm('Clear the conversation transcript?')) {
         clearTranscript();
+    }
+});
+
+// Test response button for debugging
+testBtn.addEventListener('click', () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        addMessage('info', 'Sending test message...');
+        
+        // Send a text message
+        ws.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+                type: 'message',
+                role: 'user',
+                content: [
+                    {
+                        type: 'input_text',
+                        text: 'Hello, can you hear me? Please respond.'
+                    }
+                ]
+            }
+        }));
+        
+        // Trigger response
+        ws.send(JSON.stringify({
+            type: 'response.create'
+        }));
     }
 });
 
@@ -60,6 +89,7 @@ function handleMessage(msg) {
                 statusEl.classList.add('connected');
                 connectBtn.textContent = 'Disconnect';
                 micBtn.disabled = false;
+                testBtn.disabled = false;
                 clearTranscript();
                 addMessage('info', 'Connected! Waiting for session...');
             }
@@ -114,6 +144,41 @@ function handleMessage(msg) {
                 window.currentAssistantMessage = '';
             }
             break;
+            
+        case 'input_audio_buffer.committed':
+            addMessage('info', 'Audio buffer committed');
+            break;
+            
+        case 'input_audio_buffer.speech_started':
+            addMessage('info', 'Speech detected');
+            break;
+            
+        case 'input_audio_buffer.speech_stopped':
+            addMessage('info', 'Speech ended');
+            break;
+            
+        case 'conversation.item.created':
+            console.log('Item created:', msg);
+            addMessage('info', 'Processing your message...');
+            break;
+            
+        case 'response.created':
+            addMessage('info', 'AI is thinking...');
+            break;
+            
+        case 'response.output_item.added':
+            console.log('Output item added:', msg);
+            break;
+            
+        case 'response.audio.delta':
+            // Handle audio playback here if needed
+            console.log('Audio delta received');
+            break;
+            
+        default:
+            // Log unknown events for debugging
+            console.log('Unknown event:', msg.type, msg);
+            break;
     }
 }
 
@@ -124,7 +189,7 @@ function sendSessionConfig() {
         session: {
             modalities: ['text', 'audio'],
             voice: 'alloy',
-            instructions: 'You are a helpful assistant.',
+            instructions: 'You are a helpful AI assistant. Please respond to what the user says.',
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: {
@@ -134,12 +199,14 @@ function sendSessionConfig() {
                 type: 'server_vad',
                 threshold: 0.5,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 200
-            }
+                silence_duration_ms: 500
+            },
+            temperature: 0.8,
+            max_response_output_tokens: 4096
         }
     };
 
-    console.log('Sending session config');
+    console.log('Sending session config:', config);
     ws.send(JSON.stringify(config));
 }
 
@@ -160,10 +227,24 @@ micBtn.addEventListener('click', async () => {
 
 async function startRecording() {
     audioContext = new AudioContext({ sampleRate: 24000 });
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+            sampleRate: 24000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true
+        } 
+    });
 
     const source = audioContext.createMediaStreamSource(mediaStream);
-    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    
+    // Use AudioWorklet if available, otherwise fall back to ScriptProcessor
+    if (audioContext.audioWorklet) {
+        // Modern approach - but would need a worklet file
+        // For now, use ScriptProcessor but with better configuration
+    }
+    
+    const processor = audioContext.createScriptProcessor(1024, 1, 1); // Smaller buffer for lower latency
 
     processor.onaudioprocess = (e) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -182,7 +263,10 @@ async function startRecording() {
 
     micBtn.textContent = 'Stop Recording';
     micBtn.classList.add('recording');
-    addMessage('info', 'Recording...');
+    addMessage('info', 'Recording... Speak now!');
+    
+    // Important: Also send a commit message after some time or when user stops talking
+    // The server_vad should handle this, but let's also add manual triggering
 }
 
 function stopRecording() {
@@ -194,9 +278,22 @@ function stopRecording() {
         audioContext.close();
         audioContext = null;
     }
+    
+    // Trigger response generation when stopping recording
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'input_audio_buffer.commit'
+        }));
+        
+        // Also try triggering a response
+        ws.send(JSON.stringify({
+            type: 'response.create'
+        }));
+    }
+    
     micBtn.textContent = 'Start Recording';
     micBtn.classList.remove('recording');
-    addMessage('info', 'Recording stopped');
+    addMessage('info', 'Recording stopped - Processing...');
 }
 
 // Audio conversion helpers

@@ -50,6 +50,7 @@ h1 {
     display: flex;
     gap: 10px;
     margin-bottom: 30px;
+    flex-wrap: wrap;
 }
 
 .btn {
@@ -119,6 +120,16 @@ h1 {
 
 .btn-clear:hover:not(:disabled) {
     background: #4b5563;
+}
+
+.btn-test {
+    background: #f59e0b;
+    color: white;
+    flex: 1;
+}
+
+.btn-test:hover:not(:disabled) {
+    background: #d97706;
 }
 
 .transcript {
