@@ -1,39 +1,61 @@
-# GPT-4 Realtime API Trial
+# GPT Realtime Voice Chat
 
-A simple web application to test Azure OpenAI's GPT-4 Realtime API for voice-based conversations.
+A web application for real-time voice conversations with Azure OpenAI's GPT Realtime API. Available in both Python (FastAPI) and Node.js (Express) implementations.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (v18 or higher)
-- Azure OpenAI resource with GPT-4 Realtime API access
+- Python 3.11+ OR Node.js (v18+)
+- Azure OpenAI resource with GPT Realtime API access
 - Modern web browser with microphone support
 
 ### Installation
 
-1. **Clone and install dependencies:**
+1. **Clone and setup:**
    ```bash
-   npm install
+   git clone <repository-url>
+   cd gpt-realtime-test
    ```
 
 2. **Configure Azure OpenAI credentials:**
    
-   Open the `.env` file and fill in your Azure OpenAI details:
+   Copy and edit the environment file:
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Fill in your Azure OpenAI details in `.env`:
    ```env
    AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
    AZURE_OPENAI_API_KEY=your-api-key-here
-   AZURE_OPENAI_DEPLOYMENT=gpt-4o-realtime-preview
+   AZURE_OPENAI_DEPLOYMENT=gpt-realtime
    PORT=3000
    ```
 
 3. **Run the application:**
+
+   **Option A: Python (Recommended)**
    ```bash
+   # Quick start script
+   ./start-python.sh
+   
+   # Or using npm script
+   npm run start:python
+   
+   # Or manually
+   .venv/bin/python server.py
+   ```
+
+   **Option B: Node.js (Legacy)**
+   ```bash
+   npm install
    npm start
    ```
 
 4. **Open your browser:**
    - Navigate to `http://localhost:3000`
    - Grant microphone permissions when prompted
+   - Click "Connect" then "Start Recording"
    - Start talking with the AI!
 
 ## 📋 Azure OpenAI Setup
@@ -53,23 +75,26 @@ A simple web application to test Azure OpenAI's GPT-4 Realtime API for voice-bas
 
 3. **Deployment Name**:
    - Go to "Model deployments" or Azure OpenAI Studio
-   - Create a deployment with the `gpt-4o-realtime-preview` model
+   - Create a deployment with the `gpt-realtime` model  
    - Use the deployment name you created
 
 ### Required Model
-- Model: `gpt-4o-realtime-preview` (or `gpt-4-realtime-preview`)
+- Model: `gpt-realtime` (latest version)
 - Ensure your Azure subscription has access to this model
 
 ## 🏗️ Project Structure
 
 ```
-gpt-realtime/
-├── server.js              # Express server with WebSocket proxy
+gpt-realtime-test/
+├── server.py               # Python FastAPI server (recommended)
+├── requirements.txt        # Python dependencies  
+├── start-python.sh        # Python startup script
+├── .venv/                 # Python virtual environment
 ├── public/                # Static files served to browser
 │   ├── index.html        # Main UI
-│   ├── app.js            # Client-side logic
+│   ├── app.js            # Client-side logic  
 │   └── styles.css        # Styling
-├── package.json          # Project dependencies
+├── package.json          # Node.js dependencies (legacy)
 ├── .env                  # Environment variables (not in git)
 ├── .env.example         # Environment template
 └── README.md            # This file
@@ -77,20 +102,28 @@ gpt-realtime/
 
 ## 🔧 How It Works
 
+**Python Implementation (Current):**
 1. **Browser** captures audio from your microphone
-2. **WebSocket** sends audio chunks to the Node.js server
-3. **Server** proxies the connection to Azure OpenAI Realtime API
+2. **WebSocket** (`/ws`) sends audio chunks to the FastAPI server
+3. **Python server** establishes secure connection to Azure OpenAI Realtime API
 4. **Azure OpenAI** processes audio and generates voice responses
-5. **Server** relays audio back to the browser
+5. **Server** relays audio back to the browser via WebSocket
 6. **Browser** plays the AI's voice response
+
+**Architecture:**
+- **Frontend**: Vanilla JavaScript with Web Audio API
+- **Backend**: Python FastAPI with async WebSocket support
+- **Connection**: Secure WebSocket proxy with SSL certificate handling
 
 ## 🎯 Features
 
-- ✅ Real-time voice conversations
-- ✅ Text transcript of conversation
-- ✅ Visual status indicators
-- ✅ Error handling and recovery
-- ✅ Simple, intuitive interface
+- ✅ **Dual Implementation**: Python (FastAPI) and Node.js (Express) servers
+- ✅ **Real-time voice conversations** with Azure OpenAI
+- ✅ **Text transcript** of conversation
+- ✅ **Visual status indicators** and connection management
+- ✅ **Error handling and recovery** with SSL certificate support
+- ✅ **Simple, intuitive interface** with modern design
+- ✅ **Cross-platform support** via Python virtual environment
 
 ## 🐛 Troubleshooting
 
@@ -101,8 +134,14 @@ gpt-realtime/
 
 ### Connection errors
 - Verify your `.env` file has correct values
-- Check that your Azure OpenAI deployment is active
+- Check that your Azure OpenAI deployment is active  
 - Ensure you have quota available in Azure
+- For Python: SSL certificate issues are handled automatically with `certifi`
+
+### Python-specific issues
+- Ensure virtual environment is activated: `.venv/bin/python`
+- Check that all requirements are installed: `pip install -r requirements.txt`
+- SSL errors should be resolved automatically with the `certifi` package
 
 ### No audio playback
 - Check browser audio settings
@@ -111,9 +150,11 @@ gpt-realtime/
 
 ## 📚 Resources
 
-- [Azure OpenAI Realtime API Documentation](https://learn.microsoft.com/azure/ai-services/openai/how-to/realtime)
+- [Azure OpenAI Realtime API Documentation](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/realtime-audio)
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 - [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
+- [Python WebSockets Library](https://websockets.readthedocs.io/)
 
 ## 📝 License
 
@@ -125,5 +166,5 @@ This is a trial/demo project. Feel free to fork and modify for your needs!
 
 ---
 
-**Status**: 🏗️ In Development
-**Last Updated**: October 20, 2025
+**Status**: ✅ **COMPLETE - Python implementation working**
+**Last Updated**: October 24, 2025

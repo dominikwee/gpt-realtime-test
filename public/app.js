@@ -16,7 +16,7 @@ connectBtn.addEventListener('click', () => {
         return;
     }
 
-    ws = new WebSocket(`ws://${window.location.host}`);
+    ws = new WebSocket(`ws://${window.location.host}/ws`);
 
     ws.onopen = () => {
         console.log('WebSocket connected');

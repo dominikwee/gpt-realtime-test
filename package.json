@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "start:python": ".venv/bin/python server.py",
+    "dev:python": ".venv/bin/python server.py"
   },
   "keywords": [
     "azure",

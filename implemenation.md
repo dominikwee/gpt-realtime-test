@@ -1,10 +1,10 @@
 # GPT Realtime API - Implementation
 
 ## Overview
-Web-based voice chat application using Azure OpenAI GPT Realtime API with the official OpenAI Node.js SDK.
+Web-based voice chat application using Azure OpenAI GPT Realtime API with Python backend and JavaScript frontend.
 
 ## Technology Stack
-- **Backend**: Node.js with Express + OpenAI SDK (`openai/realtime/ws`)
+- **Backend**: Python with FastAPI + WebSockets + OpenAI SDK
 - **Frontend**: Vanilla JavaScript with Web Audio API
 - **Model**: `gpt-realtime` (2025-08-28) on Azure OpenAI
 - **API Version**: `2025-04-01-preview`
@@ -12,8 +12,8 @@ Web-based voice chat application using Azure OpenAI GPT Realtime API with the of
 ## Architecture
 ```
 ┌─────────────────┐         ┌──────────────────┐         ┌─────────────────────┐
-│   Web Browser   │ ◄────── │  Express Server  │ ◄────── │ Azure OpenAI        │
-│   (HTML/JS)     │   WS    │  + OpenAI SDK    │   WS    │ gpt-realtime        │
+│   Web Browser   │ ◄────── │  FastAPI Server  │ ◄────── │ Azure OpenAI        │
+│   (HTML/JS)     │   WS    │  + WebSockets    │   WS    │ gpt-realtime        │
 │   + Microphone  │         │  (Proxy)         │         │                     │
 └─────────────────┘         └──────────────────┘         └─────────────────────┘
 ```
@@ -21,24 +21,27 @@ Web-based voice chat application using Azure OpenAI GPT Realtime API with the of
 ## Implementation Steps
 
 ### Phase 1: Project Setup
-1. **Initialize Node.js Project**
-   - Create `package.json` with project metadata
-   - Install dependencies:
-     - `express` - Web server
-     - `dotenv` - Environment variable management
-     - `ws` - WebSocket client for realtime API
+1. **Initialize Python Project**
+   - Create virtual environment (`.venv`)
+   - Install dependencies via `requirements.txt`:
+     - `fastapi` - Modern async web framework
+     - `websockets` - WebSocket client/server
+     - `uvicorn` - ASGI server
+     - `python-dotenv` - Environment variable management
+     - `openai` - OpenAI SDK for Python
+     - `certifi` - SSL certificate bundle
    
 2. **Environment Configuration**
    - Create `.env` file for Azure credentials:
      - `AZURE_OPENAI_ENDPOINT` - Your Azure OpenAI endpoint URL
      - `AZURE_OPENAI_API_KEY` - Your API key
-     - `AZURE_OPENAI_DEPLOYMENT` - Deployment name (e.g., "gpt-4o-realtime-preview")
+     - `AZURE_OPENAI_DEPLOYMENT` - Deployment name (e.g., "gpt-realtime")
 
 ### Phase 2: Backend Development
-3. **Create Express Server** (`server.js`)
-   - Set up HTTPS server (required for microphone access)
+3. **Create FastAPI Server** (`server.py`)
+   - Set up async web server with WebSocket support
    - Serve static files (HTML, CSS, JS)
-   - Create WebSocket proxy endpoint to Azure OpenAI
+   - Create WebSocket proxy endpoint (`/ws`) to Azure OpenAI
    - Handle authentication with Azure API key
    - Forward audio streams bidirectionally
 
@@ -46,34 +49,37 @@ Web-based voice chat application using Azure OpenAI GPT Realtime API with the of
    - Accept WebSocket connections from browser
    - Establish connection to Azure OpenAI Realtime API
    - Relay messages between browser and Azure
-   - Handle connection errors and reconnection
+   - Handle connection errors and SSL certificates
 
 ## Implementation
 
-### Backend (`server.js`)
-- Express server with WebSocket support
-- Uses official `OpenAIRealtimeWS.azure()` SDK method
+### Backend (`server.py`)
+- FastAPI server with async WebSocket support
+- Manual WebSocket connection to Azure OpenAI Realtime API
+- SSL certificate handling with `certifi`
 - Proxies WebSocket connection between browser and Azure
 - Forwards all events bidirectionally
-- Simple, clean code (~90 lines)
+- Clean, async Python code (~180 lines)
 
 ### Frontend (`public/`)
 **index.html**: Simple UI with Connect and Recording buttons
 **styles.css**: Modern gradient design
 **app.js**: 
-- WebSocket client connection
+- WebSocket client connection to `/ws` endpoint
 - Microphone capture with Web Audio API
 - PCM16 audio conversion at 24kHz
 - Session configuration with server VAD
 - Event handling for transcripts and responses
 
 ## Key Features
-✅ Official OpenAI SDK integration
+✅ Python FastAPI backend with async support
+✅ Manual WebSocket integration with Azure OpenAI
+✅ SSL certificate handling for secure connections
 ✅ Clean proxy architecture
 ✅ Voice activity detection (server-side)
 ✅ Audio transcription with Whisper
 ✅ Real-time audio streaming
-✅ Simple, maintainable codebase
+✅ Cross-platform Python implementation
 
 ## Configuration
 Session setup in `app.js`:
@@ -100,34 +106,49 @@ Session setup in `app.js`:
 ## Current Status
 
 ### Completed ✅
-- [x] Server setup with OpenAI SDK
+- [x] Python server setup with FastAPI
 - [x] Azure OpenAI connection working
-- [x] WebSocket proxy implementation
+- [x] WebSocket proxy implementation with SSL
 - [x] Client UI (HTML/CSS)
 - [x] Microphone capture
 - [x] Audio conversion (Float32 → PCM16)
 - [x] Session configuration
 - [x] Event handling structure
+- [x] Full voice conversation flow working
 
-### Working
+### Working ✅
 - Session creation and configuration
 - WebSocket communication
 - Audio streaming to Azure
-
-### To Test
-- [ ] Full voice conversation flow
-- [ ] Audio playback from AI
-- [ ] Transcript display
-- [ ] Error recovery
+- Voice conversation flow
+- Audio playback from AI
+- Transcript display
+- Error recovery
 
 ## Usage
+
+### Python (Recommended)
+```bash
+# Using Python virtual environment
+./start-python.sh
+
+# Or using npm script
+npm run start:python
+
+# Or directly
+.venv/bin/python server.py
+```
+
+### Node.js (Legacy)
 ```bash
 npm start
-# Open http://localhost:3000
-# Click "Connect"
-# Click "Start Recording"
-# Speak to the AI
 ```
+
+Then:
+- Open http://localhost:3000
+- Click "Connect"
+- Click "Start Recording" 
+- Speak to the AI
 
 ## Important Notes
 - Uses `gpt-realtime` model (NOT `gpt-4o-realtime-preview`)
@@ -143,10 +164,23 @@ npm start
 
 ## Development Workflow
 
-1. **Local Development**
+1. **Python Development (Current)**
+   ```bash
+   # Setup virtual environment (already done)
+   python -m venv .venv
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   
+   # Run server
+   ./start-python.sh
+   ```
+
+2. **Legacy Node.js Development**
    ```bash
    npm install
    npm run dev
+   ```
 ## Resources
 - [Azure OpenAI Realtime API Documentation](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/realtime-audio)
 - [OpenAI Node.js SDK - Realtime](https://github.com/openai/openai-node/tree/main/examples/azure/realtime)
@@ -154,5 +188,5 @@ npm start
 
 ---
 
-**Status**: Core implementation complete
-**Last Updated**: October 23, 2025
+**Status**: ✅ **COMPLETE - Python implementation working**
+**Last Updated**: October 24, 2025
