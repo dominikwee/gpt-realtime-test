@@ -230,3 +230,15 @@ h1 {
     animation: dots 1.5s infinite;
     font-weight: bold;
 }
+
+.audio-playing {
+    background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+    font-weight: 600;
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}

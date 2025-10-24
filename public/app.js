@@ -2,6 +2,8 @@
 let ws = null;
 let audioContext = null;
 let mediaStream = null;
+let playbackAudioContext = null;
+let audioQueue = [];
 
 // UI Elements
 const connectBtn = document.getElementById('connectBtn');
@@ -171,8 +173,27 @@ function handleMessage(msg) {
             break;
             
         case 'response.audio.delta':
-            // Handle audio playback here if needed
-            console.log('Audio delta received');
+            // Handle audio playback
+            if (msg.delta) {
+                playAudioDelta(msg.delta);
+                // Show audio playing indicator
+                if (!document.getElementById('audioPlaying')) {
+                    const indicator = document.createElement('div');
+                    indicator.id = 'audioPlaying';
+                    indicator.className = 'message info audio-playing';
+                    indicator.innerHTML = '🔊 AI is speaking...';
+                    transcriptEl.appendChild(indicator);
+                    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+                }
+            }
+            break;
+            
+        case 'response.audio.done':
+            // Remove audio playing indicator
+            const audioIndicator = document.getElementById('audioPlaying');
+            if (audioIndicator) {
+                audioIndicator.remove();
+            }
             break;
             
         default:
@@ -369,4 +390,78 @@ function hideTypingIndicator() {
     if (indicator) {
         indicator.remove();
     }
+}
+
+// Audio playback functions
+async function initPlaybackAudioContext() {
+    if (!playbackAudioContext) {
+        playbackAudioContext = new (window.AudioContext || window.webkitAudioContext)({
+            sampleRate: 24000
+        });
+    }
+    return playbackAudioContext;
+}
+
+function base64ToArrayBuffer(base64) {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
+
+function pcm16ToFloat32(pcm16Buffer) {
+    const dataView = new DataView(pcm16Buffer);
+    const float32Array = new Float32Array(pcm16Buffer.byteLength / 2);
+    
+    for (let i = 0; i < float32Array.length; i++) {
+        const int16 = dataView.getInt16(i * 2, true);
+        float32Array[i] = int16 / (int16 < 0 ? 0x8000 : 0x7FFF);
+    }
+    
+    return float32Array;
+}
+
+async function playAudioDelta(base64Audio) {
+    try {
+        const context = await initPlaybackAudioContext();
+        
+        // Decode base64 to PCM16
+        const pcm16Buffer = base64ToArrayBuffer(base64Audio);
+        
+        // Convert PCM16 to Float32
+        const float32Data = pcm16ToFloat32(pcm16Buffer);
+        
+        // Create audio buffer
+        const audioBuffer = context.createBuffer(1, float32Data.length, 24000);
+        audioBuffer.getChannelData(0).set(float32Data);
+        
+        // Queue and play
+        audioQueue.push(audioBuffer);
+        
+        if (audioQueue.length === 1) {
+            playNextInQueue();
+        }
+    } catch (error) {
+        console.error('Error playing audio:', error);
+    }
+}
+
+function playNextInQueue() {
+    if (audioQueue.length === 0) return;
+    
+    const audioBuffer = audioQueue[0];
+    const source = playbackAudioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(playbackAudioContext.destination);
+    
+    source.onended = () => {
+        audioQueue.shift();
+        if (audioQueue.length > 0) {
+            playNextInQueue();
+        }
+    };
+    
+    source.start(0);
 }
